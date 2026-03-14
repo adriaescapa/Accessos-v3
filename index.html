@@ -384,6 +384,8 @@ body{
   background:var(--dark); color:#fff;
   font-size:10px; padding:2px 8px; border-radius:10px;
 }
+
+@keyframes loadingAnim{0%{background-position:200% 0}100%{background-position:-200% 0}}
 </style>
 </head>
 <body>
@@ -463,6 +465,7 @@ body{
       </div>
     </div>
   </div>
+  <div id="loadingBar" style="display:none;position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--red) 0%,#ff6b6b 50%,var(--red) 100%);background-size:200% 100%;animation:loadingAnim 1.2s linear infinite;z-index:999;"></div>
   <button class="ac-intern-btn" onclick="showLogin()">🔒 Accés intern</button>
 </div>
 
@@ -545,12 +548,46 @@ const USERS = [
   {email:'admin@trans-escapa.com', pass:'escapa2024'},
   {email:'xavier.serra@trans-escapa.com', pass:'escapa2024'}
 ];
+const API = 'https://script.google.com/macros/s/AKfycbwPaAAyxwKyhvF5gO-JTJJbD0uEeZwHciee2athOP0bmqa55CwsZzC_Y60x8NI80Oej/exec';
 
-let LOG = JSON.parse(localStorage.getItem('te-log')||'[]');
+let LOG = [];
 let currentTab = 'entrada';
 
-function saveLOG(){
-  localStorage.setItem('te-log', JSON.stringify(LOG));
+// ── API GOOGLE SHEETS ──
+async function apiPost(payload){
+  try{
+    const r = await fetch(API, {
+      method:'POST',
+      body: JSON.stringify(payload)
+    });
+    return await r.json();
+  } catch(e){
+    console.error('API error:',e);
+    return {ok:false};
+  }
+}
+
+async function loadLOG(){
+  showLoading(true);
+  try{
+    const r = await apiPost({action:'getAll'});
+    if(r.ok && r.data){
+      LOG = r.data.map(x=>({...x, id:Number(x.id)}));
+    }
+  } catch(e){
+    console.error('loadLOG:',e);
+  }
+  showLoading(false);
+  renderLogAvui();
+}
+
+function showLoading(v){
+  let el = document.getElementById('loadingBar');
+  if(el) el.style.display = v?'block':'none';
+}
+
+async function saveLOG(){
+  // No cal — es guarda a Sheets directament a cada acció
 }
 
 // ── RELLOTGE ──
@@ -573,7 +610,7 @@ tickClock();
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if(id==='screenHistorial') renderHistorial();
+  if(id==='screenHistorial'){ loadLOG().then(()=>renderHistorial()); }
 }
 
 // ── TABS ──
@@ -590,7 +627,7 @@ function setTab(t){
 }
 
 // ── REGISTRE ──
-function submitAcces(){
+async function submitAcces(){
   const nom = document.getElementById('acNom').value.trim();
   const empresa = document.getElementById('acEmpresa').value.trim();
   const motiu = document.getElementById('acMotiu').value;
@@ -609,8 +646,15 @@ function submitAcces(){
     data, hora,
     horaSortida: null
   };
+  // Desa a Google Sheets
+  const btn = document.getElementById('acSubmitBtn');
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  const res = await apiPost({action:'entrada', ...entry});
+  btn.disabled = false;
+  btn.style.opacity = '1';
+  if(!res.ok){ alert('Error en guardar el registre. Comprova la connexió.'); return; }
   LOG.unshift(entry);
-  saveLOG();
   renderLogAvui();
   // Confirmació
   const isE = currentTab==='entrada';
@@ -634,13 +678,13 @@ function closeConfirm(){
 }
 
 // ── SORTIDA RÀPIDA ──
-function registrarSortida(id){
+async function registrarSortida(id){
   const r = LOG.find(x=>x.id===id);
   if(!r) return;
   const now = new Date();
   r.horaSortida = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  saveLOG();
   renderLogAvui();
+  await apiPost({action:'sortida', id: r.id, horaSortida: r.horaSortida});
   document.getElementById('cfIcon').textContent = '👋';
   document.getElementById('cfTitle').textContent = 'Sortida registrada';
   document.getElementById('cfTime').textContent = r.horaSortida;
@@ -760,7 +804,7 @@ if('serviceWorker' in navigator){
 }
 
 // ── INIT ──
-renderLogAvui();
+loadLOG();
 </script>
 </body>
 </html>
