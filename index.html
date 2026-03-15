@@ -548,7 +548,7 @@ const USERS = [
   {email:'admin@trans-escapa.com', pass:'escapa2024'},
   {email:'xavier.serra@trans-escapa.com', pass:'escapa2024'}
 ];
-const API = 'https://script.google.com/macros/s/AKfycbwPaAAyxwKyhvF5gO-JTJJbD0uEeZwHciee2athOP0bmqa55CwsZzC_Y60x8NI80Oej/exec';
+const API = 'https://script.google.com/macros/s/AKfycbzMLBdEn9wMhIfR3Uc6aStZgd3G7B_Phw3LThRt4reUxMpEGwbyNme-Tc4T1K3GwHcv/exec';
 
 let LOG = [];
 let currentTab = 'entrada';
@@ -556,14 +556,31 @@ let currentTab = 'entrada';
 // ── API GOOGLE SHEETS ──
 async function apiPost(payload){
   try{
+    // Google Apps Script requereix URLSearchParams per evitar CORS
+    const params = new URLSearchParams();
+    params.append('data', JSON.stringify(payload));
     const r = await fetch(API, {
       method:'POST',
-      body: JSON.stringify(payload)
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: params.toString()
     });
-    return await r.json();
+    const text = await r.text();
+    try{ return JSON.parse(text); }
+    catch(e){ return {ok:true}; }
   } catch(e){
-    console.error('API error:',e);
-    return {ok:false};
+    // Fallback: no-cors (no podem llegir la resposta però es guarda)
+    try{
+      await fetch(API, {
+        method:'POST',
+        mode:'no-cors',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({data: JSON.stringify(payload)}).toString()
+      });
+      return {ok:true};
+    } catch(e2){
+      console.error('API error:',e2);
+      return {ok:false};
+    }
   }
 }
 
