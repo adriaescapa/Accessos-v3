@@ -548,47 +548,48 @@ const USERS = [
   {email:'admin@trans-escapa.com', pass:'escapa2024'},
   {email:'xavier.serra@trans-escapa.com', pass:'escapa2024'}
 ];
-const API = 'https://script.google.com/macros/s/AKfycbx4ctDPa1qpToWMzGbTzp_CtgEOzQPlZIP4cr-oLHLtjPxtpM9gEpCpdghZsaxHnMIW/exec';
+const API = 'https://script.google.com/macros/s/AKfycbxUg0PLQqmVfSuIVQp9LKuacDgL-tp8YS02f16cFhiBpUu3h5iX77OYqpsv4uP0O7mA/exec';
 
 let LOG = [];
 let currentTab = 'entrada';
 
 // ── API GOOGLE SHEETS ──
-async function apiPost(payload){
-  try{
+// Escriptura: iframe ocult (evita CORS)
+function apiPost(payload){
+  return new Promise((resolve)=>{
     const url = API + '?data=' + encodeURIComponent(JSON.stringify(payload));
-    // Fem servir un iframe ocult per enviar la petició sense bloqueig CORS
-    return new Promise((resolve)=>{
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = url;
-      iframe.onload = ()=>{ document.body.removeChild(iframe); resolve({ok:true}); };
-      iframe.onerror = ()=>{ document.body.removeChild(iframe); resolve({ok:true}); };
-      document.body.appendChild(iframe);
-      // Timeout de seguretat
-      setTimeout(()=>{ 
-        if(document.body.contains(iframe)) document.body.removeChild(iframe); 
-        resolve({ok:true}); 
-      }, 5000);
-    });
-  } catch(e){
-    console.error('API error:',e);
-    return {ok:false};
-  }
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = url;
+    const cleanup = ()=>{ if(document.body.contains(iframe)) document.body.removeChild(iframe); };
+    iframe.onload = ()=>{ cleanup(); resolve({ok:true}); };
+    iframe.onerror = ()=>{ cleanup(); resolve({ok:true}); };
+    document.body.appendChild(iframe);
+    setTimeout(()=>{ cleanup(); resolve({ok:true}); }, 6000);
+  });
 }
 
-async function apiGet(payload){
-  try{
-    const url = API + '?data=' + encodeURIComponent(JSON.stringify(payload));
-    const r = await fetch(url, {
-      method:'GET',
-      headers:{'Content-Type':'application/json'}
-    });
-    return await r.json();
-  } catch(e){
-    console.error('apiGet error:',e);
-    return {ok:false, data:[]};
-  }
+// Lectura: JSONP (l'únic mètode que funciona cross-origin sense servidor)
+function apiGet(payload){
+  return new Promise((resolve)=>{
+    const cbName = 'cb_' + Date.now();
+    const url = API + '?callback=' + cbName + '&data=' + encodeURIComponent(JSON.stringify(payload));
+    window[cbName] = function(data){
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+    const script = document.createElement('script');
+    script.src = url;
+    script.onerror = ()=>{
+      delete window[cbName];
+      resolve({ok:false, data:[]});
+    };
+    document.head.appendChild(script);
+    setTimeout(()=>{
+      if(window[cbName]){ delete window[cbName]; resolve({ok:false, data:[]}); }
+    }, 8000);
+  });
 }
 
 async function loadLOG(){
