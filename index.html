@@ -548,7 +548,7 @@ const USERS = [
   {email:'admin@trans-escapa.com', pass:'escapa2024'},
   {email:'xavier.serra@trans-escapa.com', pass:'escapa2024'}
 ];
-const API = 'https://script.google.com/macros/s/AKfycbwsibb-nE5ru8rlcro8LXF-4YZRfj_MCQCBNAIu2PYg-4QmXaWWIFGjbr9koFKi--Yg/exec';
+const API = 'https://script.google.com/macros/s/AKfycbx4ctDPa1qpToWMzGbTzp_CtgEOzQPlZIP4cr-oLHLtjPxtpM9gEpCpdghZsaxHnMIW/exec';
 
 let LOG = [];
 let currentTab = 'entrada';
@@ -556,12 +556,21 @@ let currentTab = 'entrada';
 // ── API GOOGLE SHEETS ──
 async function apiPost(payload){
   try{
-    // no-cors: no podem llegir resposta però Apps Script guarda les dades
-    await fetch(API + '?data=' + encodeURIComponent(JSON.stringify(payload)), {
-      method:'GET',
-      mode:'no-cors'
+    const url = API + '?data=' + encodeURIComponent(JSON.stringify(payload));
+    // Fem servir un iframe ocult per enviar la petició sense bloqueig CORS
+    return new Promise((resolve)=>{
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = url;
+      iframe.onload = ()=>{ document.body.removeChild(iframe); resolve({ok:true}); };
+      iframe.onerror = ()=>{ document.body.removeChild(iframe); resolve({ok:true}); };
+      document.body.appendChild(iframe);
+      // Timeout de seguretat
+      setTimeout(()=>{ 
+        if(document.body.contains(iframe)) document.body.removeChild(iframe); 
+        resolve({ok:true}); 
+      }, 5000);
     });
-    return {ok:true};
   } catch(e){
     console.error('API error:',e);
     return {ok:false};
@@ -571,9 +580,13 @@ async function apiPost(payload){
 async function apiGet(payload){
   try{
     const url = API + '?data=' + encodeURIComponent(JSON.stringify(payload));
-    const r = await fetch(url);
+    const r = await fetch(url, {
+      method:'GET',
+      headers:{'Content-Type':'application/json'}
+    });
     return await r.json();
   } catch(e){
+    console.error('apiGet error:',e);
     return {ok:false, data:[]};
   }
 }
