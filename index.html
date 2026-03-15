@@ -548,7 +548,7 @@ const USERS = [
   {email:'admin@trans-escapa.com', pass:'escapa2024'},
   {email:'xavier.serra@trans-escapa.com', pass:'escapa2024'}
 ];
-const API = 'https://script.google.com/macros/s/AKfycbzMLBdEn9wMhIfR3Uc6aStZgd3G7B_Phw3LThRt4reUxMpEGwbyNme-Tc4T1K3GwHcv/exec';
+const API = 'https://script.google.com/macros/s/AKfycbxkR-M7PfWBya6InhLjiedaH3aOY2fjlXrOYnIeqKEfxLCgJe6Bry-4-3IeTrVJeeGl/exec';
 
 let LOG = [];
 let currentTab = 'entrada';
@@ -556,38 +556,32 @@ let currentTab = 'entrada';
 // ── API GOOGLE SHEETS ──
 async function apiPost(payload){
   try{
-    // Google Apps Script requereix URLSearchParams per evitar CORS
-    const params = new URLSearchParams();
-    params.append('data', JSON.stringify(payload));
-    const r = await fetch(API, {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: params.toString()
+    // no-cors: no podem llegir resposta però Apps Script guarda les dades
+    await fetch(API + '?data=' + encodeURIComponent(JSON.stringify(payload)), {
+      method:'GET',
+      mode:'no-cors'
     });
-    const text = await r.text();
-    try{ return JSON.parse(text); }
-    catch(e){ return {ok:true}; }
+    return {ok:true};
   } catch(e){
-    // Fallback: no-cors (no podem llegir la resposta però es guarda)
-    try{
-      await fetch(API, {
-        method:'POST',
-        mode:'no-cors',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({data: JSON.stringify(payload)}).toString()
-      });
-      return {ok:true};
-    } catch(e2){
-      console.error('API error:',e2);
-      return {ok:false};
-    }
+    console.error('API error:',e);
+    return {ok:false};
+  }
+}
+
+async function apiGet(payload){
+  try{
+    const url = API + '?data=' + encodeURIComponent(JSON.stringify(payload));
+    const r = await fetch(url);
+    return await r.json();
+  } catch(e){
+    return {ok:false, data:[]};
   }
 }
 
 async function loadLOG(){
   showLoading(true);
   try{
-    const r = await apiPost({action:'getAll'});
+    const r = await apiGet({action:'getAll'});
     if(r.ok && r.data){
       LOG = r.data.map(x=>({...x, id:Number(x.id)}));
     }
@@ -812,13 +806,7 @@ function renderHistorial(){
   }).join('');
 }
 
-// ── SERVICE WORKER ──
-if('serviceWorker' in navigator){
-  const swCode = atob('Y29uc3QgQ0FDSEU9J3RlLXYyJztzZWxmLmFkZEV2ZW50TGlzdGVuZXIoJ2luc3RhbGwnLGU9PntzZWxmLnNraXBXYWl0aW5nKCk7fSk7c2VsZi5hZGRFdmVudExpc3RlbmVyKCdhY3RpdmF0ZScsZT0+e3NlbGYuY2xpZW50cy5jbGFpbSgpO30pO3NlbGYuYWRkRXZlbnRMaXN0ZW5lcignZmV0Y2gnLGU9PntlLnJlc3BvbmRXaXRoKGZldGNoKGUucmVxdWVzdCkuY2F0Y2goKCk9PmNhY2hlcy5tYXRjaChlLnJlcXVlc3QpKSk7fSk7');
-  const blob = new Blob([swCode],{type:'application/javascript'});
-  navigator.serviceWorker.register(URL.createObjectURL(blob))
-    .catch(e=>console.log('SW:',e));
-}
+// Service Worker no disponible en aquest entorn
 
 // ── INIT ──
 loadLOG();
